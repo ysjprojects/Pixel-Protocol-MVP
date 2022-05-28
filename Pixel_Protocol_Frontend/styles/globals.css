@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#canvas-container {
+  width: 100%;
+  text-align: center;
+}
+
+canvas {
+  display: inline;
+}
+
+body {
+  overflow: hidden;
+  overscroll-behavior-x: none;
+}
+
+#navLogo {
+  transition: all 200ms ease-out;
+}
+
+#navLogo:hover {
+  cursor: pointer;
+  filter: brightness(50%);
+
+}
+
+.text-color-web3 {
+  color: #2E7DAF !important;
+}
+
+.bg-color-web3 {
+  background-color: #2E7DAF !important;
+}
+
+.noscrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.noscrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
