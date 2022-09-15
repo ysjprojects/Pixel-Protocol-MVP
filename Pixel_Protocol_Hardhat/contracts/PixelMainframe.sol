@@ -29,7 +29,7 @@ contract PixelMainframe is VRFConsumerBaseV2, IERC721Receiver {
 
     mapping(uint256 => uint256) private requestIdToTokenId;
     mapping(uint256 => bool) private requestIdHasColorChange;
-    mapping(uint256 => bytes3) private requestIdToNewColor;
+    mapping(uint256 => bytes1) private requestIdToNewColor;
     mapping(uint256 => address) private battlePlayer;
 
     mapping(address => uint256) private totalReward;
@@ -168,7 +168,7 @@ contract PixelMainframe is VRFConsumerBaseV2, IERC721Receiver {
         emit Unstaked(msg.sender, _tokenId);
     }
 
-    function battle(uint256 _tokenId, bytes3 _colorCode)
+    function battle(uint256 _tokenId, bytes1 _colorCode)
         external
         payable
         requiresActive
@@ -219,7 +219,7 @@ contract PixelMainframe is VRFConsumerBaseV2, IERC721Receiver {
         uint256 tax = nftContract.getFee(tokenId) / 5; //20% tax for keeping the contract running (funding LINK)
         uint256 toPrevOwner = fee - tax;
 
-        bytes3 newColorCode = requestIdToNewColor[requestId];
+        bytes1 newColorCode = requestIdToNewColor[requestId];
 
         bool hasColorChange = requestIdHasColorChange[requestId];
 

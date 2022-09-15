@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 
+
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
+import "./PixelCrowdsale";
 
 pragma solidity ^0.8.4;
 
@@ -13,17 +15,15 @@ contract PixelNFT is ERC721Enumerable {
         uint256 y;
     }
 
-    bool private ownerCanMint = true;
+    PixelCrowdsale private immutable crowdsaleContract;
+
     bool private mintingEnabled;
     string private baseURI;
 
-    uint256 private immutable baseFee;
-    uint256 private immutable feeIncrement;
+    uint256 private immutable baseValue;
     address private immutable owner;
 
-    mapping(uint256 => mapping(uint256 => bytes3)) private colorAtXY;
-    mapping(uint256 => mapping(uint256 => bool)) private isMintedAtXY;
-
+    mapping(uint256 => mapping(uint256 => bytes1)) private colorAtXY;
     mapping(uint256 => bool) private isMinted;
 
     mapping(uint256 => mapping(uint256 => uint256)) private tokenIdAtXY;
@@ -43,11 +43,11 @@ contract PixelNFT is ERC721Enumerable {
         uint256 indexed tokenId,
         uint256 indexed x,
         uint256 indexed y,
-        bytes3 newColor
+        bytes1 newColor
     );
 
     modifier rejectIfMinted(uint256 _x, uint256 _y) {
-        require(!isMintedAtXY[_x][_y], "Token is already minted");
+        require(!getIsMinted(_x,_y), "Token is already minted");
         _;
     }
 
@@ -73,14 +73,13 @@ contract PixelNFT is ERC721Enumerable {
         string memory _name,
         string memory _symbol,
         string memory _intialBaseURI,
-        uint256 _baseFee,
-        uint256 _feeIncrement
+        uint256 _baseValue,
     ) ERC721(_name, _symbol) {
-        require(_baseFee > 0, "Base fee cannot be <= to 0");
+        require(_baseValue > 0, "Base fee cannot be <= to 0");
         owner = _msgSender();
         baseURI = _intialBaseURI;
-        baseFee = _baseFee;
-        feeIncrement = _feeIncrement;
+        baseValue = _baseValue;
+        crowdsaleContract = new PixelCrowdsale(address(this));
     }
 
     // getters
@@ -89,13 +88,13 @@ contract PixelNFT is ERC721Enumerable {
         return owner;
     }
 
-    function getColor(uint256 _tokenId) public view returns (bytes3) {
+    function getColor(uint256 _tokenId) public view returns (bytes1) {
         require(isMinted[_tokenId], "Token does not exist");
         Coordinates memory c = XYAtTokenId[_tokenId];
         return getColor(c.x, c.y);
     }
 
-    function getColor(uint256 _x, uint256 _y) public view returns (bytes3) {
+    function getColor(uint256 _x, uint256 _y) public view returns (bytes1) {
         return colorAtXY[_x][_y];
     }
 
@@ -104,7 +103,7 @@ contract PixelNFT is ERC721Enumerable {
     }
 
     function getIsMinted(uint256 _x, uint256 _y) public view returns (bool) {
-        return isMintedAtXY[_x][_y];
+        return getIsMinted(tokenIdAtXY[_x][_y]);
     }
 
     function getTokenIdAtXY(uint256 _x, uint256 _y)
@@ -126,13 +125,10 @@ contract PixelNFT is ERC721Enumerable {
         return (c.x, c.y);
     }
 
-    function getBaseFee() public view returns (uint256) {
-        return baseFee;
+    function getbaseValue() public view returns (uint256) {
+        return baseValue;
     }
 
-    function getFeeIncrement() public view returns (uint256) {
-        return feeIncrement;
-    }
 
     function getPrevOwner(uint256 _tokenId) public view returns (address) {
         return prevOwner[_tokenId];
@@ -142,28 +138,28 @@ contract PixelNFT is ERC721Enumerable {
         return mintingEnabled;
     }
 
-    function getFee(uint256 _tokenId) public view returns (uint256) {
+    function getFairValue(uint256 _tokenId) public view returns (uint256) {
         require(isMinted[_tokenId], "Token does not exist");
 
         Coordinates memory c = XYAtTokenId[_tokenId];
-        return getFee(c.x, c.y);
+        return getFairValue(c.x, c.y);
     }
 
     // 1. Price of minting each token is determined by its proximity from the center of the canvas
     // 2. Fee increases by a fixed amount the closer a coordinate is to the center
 
-    function getFee(uint256 _x, uint256 _y)
+    function getFairValue(uint256 _x, uint256 _y)
         public
         view
         validCoords(_x, _y)
         returns (uint256)
     {
-        return baseFee + feeIncrement * getFeeWeight(_x, _y);
+        return baseValue + getWeight(_x,_y) * baseValue / 249001 /*499 * 499*/;
     }
 
     // 1. Formula for calculating fee weight for a pixel at position (x,y)
 
-    function getFeeWeight(uint256 _x, uint256 _y)
+    function getWeight(uint256 _x, uint256 _y)
         internal
         pure
         returns (uint256)
@@ -185,9 +181,9 @@ contract PixelNFT is ERC721Enumerable {
     function getCanvasRow(uint256 _row)
         public
         view
-        returns (bytes3[1000] memory)
+        returns (bytes1[1000] memory)
     {
-        bytes3[1000] memory cv;
+        bytes1[1000] memory cv;
         for (uint256 i = 0; i < 1000; i++) {
             cv[i] = colorAtXY[_row][i];
         }
@@ -209,7 +205,7 @@ contract PixelNFT is ERC721Enumerable {
 
         string memory base = _baseURI();
         Coordinates memory c = XYAtTokenId[_tokenId];
-        bytes3 colorCode = getColor(_tokenId);
+        bytes1 colorCode = getColor(_tokenId);
 
         return
             bytes(base).length > 0
@@ -228,13 +224,10 @@ contract PixelNFT is ERC721Enumerable {
                 : "";
     }
 
-    function canOwnerMint() public view returns (bool) {
-        return ownerCanMint;
-    }
 
     // setters
 
-    function setTokenColor(uint256 _tokenId, bytes3 _colorCode)
+    function setTokenColor(uint256 _tokenId, bytes1 _colorCode)
         public
         onlyTokenOwner(_tokenId)
     {
@@ -253,9 +246,7 @@ contract PixelNFT is ERC721Enumerable {
         baseURI = _newBaseURI;
     }
 
-    function disableOwnerMint() public onlyContractOwner {
-        ownerCanMint = false;
-    }
+
 
     // 1. User mints a new Pixel at coordinates (x,y)
     // 2. Transaction will revert if a Pixel has already been minted at the coordinates
@@ -263,47 +254,67 @@ contract PixelNFT is ERC721Enumerable {
     function mintNFT(
         uint256 _x,
         uint256 _y,
-        bytes3 _colorCode
+        bytes1 _colorCode
     ) external payable {
         require(mintingEnabled, "Minting is not enabled");
         require(
-            !(msg.value < getFee(_x, _y)),
+            !(msg.value < getFairValue(_x, _y)),
             "Insufficient balance for minting"
         );
         _mintNFT(_x, _y, _colorCode);
     }
 
-    function adminMint(
-        uint256[] memory _X,
-        uint256[] memory _Y,
-        bytes3[] memory _C
-    ) public onlyContractOwner {
-        require(ownerCanMint, "Admin mint disabled");
-        require(
-            _X.length == _Y.length && _Y.length == _C.length,
-            "Unequal length arrays"
-        );
-        for (uint256 i = 0; i < _X.length; i++) {
-            _mintNFT(_X[i], _Y[i], _C[i]);
+    function CrowdsaleMint(address _buyer, uint256 _startX, uint256 _startY, bytes1[100] _colorList) public {
+        require(msg.sender == address(crowdsaleContract), "Only crowdsale contract allowed");
+        for(uint i = _startX;i < _startX+10;i++) {
+            for(uint j = _startY;j < _startY + 10;j++) {
+                bytes1 _color = _colorList[i-_StartX + (j - startY)*10];
+                _mintNFTTo(_buyer,i,j,color);
+            }
         }
+
+    }
+
+    function _mintNFTTo(address _receiver, uint256 _x, uint256 _y, bytes1 _colorCode) internal {
+        uint256 id = totalSupply() + 1;
+
+        _safeMint(_receiver, id);
+
+        colorAtXY[_x][_y] = _colorCode;
+        isMinted[id] = true;
+        tokenIdAtXY[_x][_y] = id;
+        XYAtTokenId[id] = Coordinates(_x, _y);
+        emit ColorChange(id, _x, _y, _colorCode);
+        emit TokenMint(_msgSender(), _x, _y, id);
     }
 
     function _mintNFT(
         uint256 _x,
         uint256 _y,
-        bytes3 _colorCode
+        bytes1 _colorCode
     ) internal validCoords(_x, _y) rejectIfMinted(_x, _y) {
         uint256 id = totalSupply() + 1;
 
         _safeMint(_msgSender(), id);
 
         colorAtXY[_x][_y] = _colorCode;
-        isMintedAtXY[_x][_y] = true;
         isMinted[id] = true;
         tokenIdAtXY[_x][_y] = id;
         XYAtTokenId[id] = Coordinates(_x, _y);
         emit ColorChange(id, _x, _y, _colorCode);
         emit TokenMint(_msgSender(), _x, _y, id);
+    }
+
+    function startCrowdsale() public onlyContractOwner {
+        crowdsaleContract.start();
+    }
+
+    function stopCrowdsale() public onlyContractOwner {
+        crowdsaleContract.stop();
+    }
+
+    function endCrowdsale() public onlyContractOwner {
+        crowdsaleContract.end();
     }
 
     function withdraw() public onlyContractOwner {
