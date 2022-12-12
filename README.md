@@ -1,5 +1,5 @@
-# cl-hack
-Source code for Chainlink Spring Hackathon 2022 project Pixel Protocol. It is deployed on https://pixel-protocol.vercel.app/
+# Overview
+Source code for Chainlink Spring Hackathon 2022 project Pixel Protocol.
 
 # Setup
 ## Frontend
